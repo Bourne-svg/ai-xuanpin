@@ -31,18 +31,21 @@ def extract_frames(video_path: str, output_dir: str, interval: int = 30):
             f"Linux环境需要安装ffmpeg解码器。"
         )
 
-    duration_sec = int(total_frames / fps)
     frame_count = 0
+    last_saved_sec = -interval - 1
 
-    for sec in range(0, duration_sec, interval):
-        cap.set(cv2.CAP_PROP_POS_MSEC, sec * 1000)
+    for frame_idx in range(total_frames):
         ret, frame = cap.read()
-        if ret:
-            filename = f"frame_{sec//60:02d}m{sec%60:02d}s.jpg"
+        if not ret:
+            break
+        current_sec = int(frame_idx / fps)
+        if current_sec % interval == 0 and current_sec != last_saved_sec:
+            filename = f"frame_{current_sec//60:02d}m{current_sec%60:02d}s.jpg"
             filepath = os.path.join(output_dir, filename)
             cv2.imwrite(filepath, frame)
             frame_count += 1
-            yield sec, filepath
+            last_saved_sec = current_sec
+            yield current_sec, filepath
 
     cap.release()
     if frame_count == 0:
