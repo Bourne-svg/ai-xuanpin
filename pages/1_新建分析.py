@@ -8,8 +8,8 @@ import tempfile
 import base64
 from datetime import datetime
 
-from config import MARKETS, DEFAULT_INTERVAL, QUICK_TEST_FRAMES
-from pipeline import run_pipeline, format_timestamp
+from config import MARKETS, DEFAULT_INTERVAL, QUICK_TEST_FRAMES, API_KEY, BASE_URL, MODEL
+from pipeline import run_pipeline, format_timestamp, check_api_health
 from utils.aggregator import deduplicate, get_statistics
 from utils.exporter import to_excel
 
@@ -62,6 +62,17 @@ with col1:
         for f in market_features["特征"]:
             st.write(f"- {f}")
 
+    # API 连接诊断
+    with st.expander("🔧 系统诊断"):
+        if st.button("检测API连接"):
+            with st.spinner("检测中..."):
+                health = check_api_health()
+                if health["status"] == "ok":
+                    st.success(f"API连接正常 - 模型: {health['model']} - 响应: {health['response']}")
+                else:
+                    st.error(f"API连接失败: {health['error']}")
+                    st.info(f"Base URL: {health['base_url']}")
+
     start_btn = st.button("🚀 开始分析", type="primary", use_container_width=True,
                           disabled=(video_path is None and input_method != "上传本地文件"))
 
@@ -99,8 +110,9 @@ with col1:
                 elif update["type"] == "frame_error":
                     idx, total = update["current"], update["total"]
                     progress_bar.progress(idx / total)
+                    err_msg = update.get("error", "未知错误")
                     with log_container:
-                        st.write(f"❌ [{update['timestamp']}] 失败: {update['error']}")
+                        st.error(f"❌ [{update['timestamp']}] 失败 | 错误: {err_msg}")
 
                 elif update["type"] == "done":
                     progress_bar.progress(1.0)

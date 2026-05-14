@@ -70,6 +70,20 @@ def analyze_frame(client: OpenAI, filepath: str, timestamp: str, prompt: str) ->
     return products
 
 
+def check_api_health() -> dict:
+    """检测 API 连接状态"""
+    try:
+        client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": "你好，请回复OK"}],
+            max_tokens=10,
+        )
+        return {"status": "ok", "model": MODEL, "response": resp.choices[0].message.content.strip()}
+    except Exception as e:
+        return {"status": "error", "model": MODEL, "base_url": BASE_URL, "error": str(e)}
+
+
 def run_pipeline(video_path: str, target_market: str = "日本",
                  interval: int = 30, quick_test: bool = False,
                  progress_callback=None):
