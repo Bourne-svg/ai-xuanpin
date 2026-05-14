@@ -4,23 +4,38 @@
 import os
 
 # ============ API配置 ============
+# 注意：部署到 Streamlit Cloud 时在 Settings → Secrets 中设置 GLM_API_KEY
+
+_HARDCODED_KEY = "f921c032b8644508a9cf0e527b85dcf7.Dqblov49GuqO1Wln"
+
+def _is_valid_key(key: str) -> bool:
+    """检查 key 是否看起来像真的 API Key（排除占位文本）"""
+    if not key or len(key) < 20:
+        return False
+    # 包含中文肯定不对
+    if any(ord(c) > 127 for c in key):
+        return False
+    return True
+
 def get_api_key():
-    """优先从 Streamlit Secrets 读取，其次环境变量，最后本地文件"""
+    """读取 API Key：Cloud Secrets → 环境变量 → 内置默认值"""
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and "GLM_API_KEY" in st.secrets:
-            return st.secrets["GLM_API_KEY"]
+        val = st.secrets.get("GLM_API_KEY", "")
+        if _is_valid_key(val):
+            return val
     except Exception:
         pass
-    return os.getenv("GLM_API_KEY", "")
+
+    val = os.getenv("GLM_API_KEY", "")
+    if _is_valid_key(val):
+        return val
+
+    return _HARDCODED_KEY
 
 API_KEY = get_api_key()
 BASE_URL = "https://open.bigmodel.cn/api/paas/v4/"
 MODEL = "glm-4.6v"
-
-# 本地运行时从环境变量或默认值读取
-if not API_KEY:
-    API_KEY = "f921c032b8644508a9cf0e527b85dcf7.Dqblov49GuqO1Wln"
 
 # ============ 分析配置 ============
 DEFAULT_INTERVAL = 30         # 默认抽帧间隔(秒)
