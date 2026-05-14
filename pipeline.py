@@ -1,13 +1,19 @@
 """
 视频分析管线：抽帧 → AI识别 → 返回产品列表
 """
+import sys
+import os
 import cv2
 import base64
-import os
 import json
 import uuid
 from datetime import datetime
 from openai import OpenAI
+
+# 强制 UTF-8，避免 Windows ASCII 编码问题
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from config import API_KEY, BASE_URL, MODEL, QUICK_TEST_FRAMES, build_prompt
 
@@ -63,7 +69,8 @@ def format_timestamp(seconds: int) -> str:
 def analyze_frame(client: OpenAI, filepath: str, timestamp: str, prompt: str) -> list:
     """用多模态模型分析单帧，返回产品列表"""
     with open(filepath, "rb") as f:
-        img_b64 = base64.b64encode(f.read()).decode("utf-8")
+        img_bytes = f.read()
+    img_b64 = base64.b64encode(img_bytes).decode("ascii")
 
     resp = client.chat.completions.create(
         model=MODEL,
