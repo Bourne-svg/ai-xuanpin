@@ -1,0 +1,41 @@
+# 视频文件（太大，不上传）
+*.mp4
+*.m4a
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# 分析结果
+data/
+frames/
+uploads/
+products.json
+products.txt
+
+# 本地脚本（含硬编码Key）
+prototype.py
+start_server.bat
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 环境变量和密钥
+.env
+*.local
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/
+
+# 临时文件
+*.log
+
+# 保留目录结构
+!data/.gitkeep
+!frames/.gitkeep
+!uploads/.gitkeep
