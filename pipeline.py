@@ -7,13 +7,8 @@ import cv2
 import base64
 import json
 import uuid
+import requests
 from datetime import datetime
-from openai import OpenAI
-
-# 强制 UTF-8，避免 Windows ASCII 编码问题
-if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from config import API_KEY, BASE_URL, MODEL, QUICK_TEST_FRAMES, build_prompt
 
@@ -66,24 +61,40 @@ def format_timestamp(seconds: int) -> str:
     return f"{seconds//60:02d}:{seconds%60:02d}"
 
 
-def analyze_frame(client: OpenAI, filepath: str, timestamp: str, prompt: str) -> list:
+def _call_glm_api(messages: list, max_tokens: int = 2048) -> dict:
+    """直接调用 GLM API，显式 UTF-8 编码避免 Windows 编码问题"""
+    url = f"{BASE_URL}/chat/completions"
+    body = {"model": MODEL, "messages": messages, "max_tokens": max_tokens}
+    # ensure_ascii=True 将中文转义为 \uXXXX，避免 Windows latin-1 编码问题
+    body_bytes = json.dumps(body, ensure_ascii=True).encode("latin-1")
+    resp = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json; charset=utf-8",
+        },
+        data=body_bytes,
+        timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def analyze_frame(filepath: str, timestamp: str, prompt: str) -> list:
     """用多模态模型分析单帧，返回产品列表"""
     with open(filepath, "rb") as f:
         img_bytes = f.read()
     img_b64 = base64.b64encode(img_bytes).decode("ascii")
 
-    resp = client.chat.completions.create(
-        model=MODEL,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                {"type": "text", "text": prompt}
-            ]
-        }]
-    )
+    data = _call_glm_api(messages=[{
+        "role": "user",
+        "content": [
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+            {"type": "text", "text": prompt}
+        ]
+    }])
 
-    raw = resp.choices[0].message.content.strip()
+    raw = data["choices"][0]["message"]["content"].strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1]
         if raw.endswith("```"):
@@ -99,13 +110,11 @@ def analyze_frame(client: OpenAI, filepath: str, timestamp: str, prompt: str) ->
 def check_api_health() -> dict:
     """检测 API 连接状态"""
     try:
-        client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": "你好，请回复OK"}],
+        data = _call_glm_api(
+            messages=[{"role": "user", "content": "Say OK in Chinese"}],
             max_tokens=10,
         )
-        return {"status": "ok", "model": MODEL, "response": resp.choices[0].message.content.strip()}
+        return {"status": "ok", "model": MODEL, "response": data["choices"][0]["message"]["content"].strip()}
     except Exception as e:
         return {"status": "error", "model": MODEL, "base_url": BASE_URL, "error": str(e)}
 
@@ -122,7 +131,6 @@ def run_pipeline(video_path: str, target_market: str = "日本",
     os.makedirs("data", exist_ok=True)
 
     prompt = build_prompt(target_market)
-    client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
 
     # Step 1: 抽帧
     all_frames = list(extract_frames(video_path, frames_dir, interval))
@@ -140,7 +148,7 @@ def run_pipeline(video_path: str, target_market: str = "日本",
         timestamp = format_timestamp(sec)
 
         try:
-            products = analyze_frame(client, filepath, timestamp, prompt)
+            products = analyze_frame(filepath, timestamp, prompt)
             all_products.extend(products)
 
             yield {
@@ -152,12 +160,15 @@ def run_pipeline(video_path: str, target_market: str = "日本",
                 "count": len(products)
             }
         except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
             yield {
                 "type": "frame_error",
                 "current": idx + 1,
                 "total": len(frames_to_process),
                 "timestamp": timestamp,
-                "error": str(e)
+                "error": str(e),
+                "traceback": tb,
             }
 
     # Step 3: 保存原始结果

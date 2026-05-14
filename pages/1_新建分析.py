@@ -111,8 +111,12 @@ with col1:
                     idx, total = update["current"], update["total"]
                     progress_bar.progress(idx / total)
                     err_msg = update.get("error", "未知错误")
+                    tb = update.get("traceback", "")
                     with log_container:
                         st.error(f"❌ [{update['timestamp']}] 失败 | 错误: {err_msg}")
+                        if tb:
+                            with st.expander(f"查看详细错误 [{update['timestamp']}]"):
+                                st.code(tb)
 
                 elif update["type"] == "done":
                     progress_bar.progress(1.0)
