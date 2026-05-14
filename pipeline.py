@@ -18,11 +18,21 @@ def extract_frames(video_path: str, output_dir: str, interval: int = 30):
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise ValueError(f"无法打开视频文件: {video_path}")
+        raise ValueError(f"无法打开视频文件: {video_path} (文件大小: {os.path.getsize(video_path) if os.path.exists(video_path) else '不存在'})")
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    backend = cap.get(cv2.CAP_PROP_BACKEND)
+
+    if total_frames <= 0:
+        cap.release()
+        raise ValueError(
+            f"视频文件无法解码 (后端={backend}, fps={fps}, 帧数={total_frames})。"
+            f"Linux环境需要安装ffmpeg解码器。"
+        )
+
     duration_sec = int(total_frames / fps)
+    frame_count = 0
 
     for sec in range(0, duration_sec, interval):
         cap.set(cv2.CAP_PROP_POS_MSEC, sec * 1000)
@@ -31,9 +41,15 @@ def extract_frames(video_path: str, output_dir: str, interval: int = 30):
             filename = f"frame_{sec//60:02d}m{sec%60:02d}s.jpg"
             filepath = os.path.join(output_dir, filename)
             cv2.imwrite(filepath, frame)
+            frame_count += 1
             yield sec, filepath
 
     cap.release()
+    if frame_count == 0:
+        raise RuntimeError(
+            f"未能抽取任何帧 (视频总帧数={total_frames}, 后端={backend})。"
+            f"请检查ffmpeg解码器是否已安装。"
+        )
 
 
 def format_timestamp(seconds: int) -> str:
